@@ -4,6 +4,8 @@ import tkinter as tk
 from . import winapi
 
 SHAPES = ["Doira", "Kvadrat"]
+QUALITY = ["Maksimal silliq", "Silliq", "Tez (piksel)"]
+MARGIN = 3  # extra source pixels so the bicubic kernel has real neighbours at the lens edge
 MODES = ["Yoqib-o'chirish", "Bosib turish"]
 RING_KEY = "#010101"
 
@@ -22,6 +24,7 @@ class Magnifier:
         self._job = None
         self._filter = None
         self._zoom = None
+        self._renderer = SmoothRenderer()
 
     @property
     def visible(self):
@@ -42,7 +45,7 @@ class Magnifier:
         self.win = tk.Toplevel(self.root)
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
-        use_mag = winapi.mag is not None and not self.cfg["smooth"]
+        use_mag = winapi.mag is not None and self.cfg.get("quality") == QUALITY[2]
         self.win.configure(bg="#000000" if use_mag else "")
         self._place(self.win)
         self.hwnd = winapi.make_overlay(self.win, exclude_from_capture=not use_mag)
@@ -70,6 +73,7 @@ class Magnifier:
                 w.destroy()
         self.win = self.ring = self.hwnd = self.ring_hwnd = self.mag_hwnd = None
         self._filter = self._zoom = None
+        self._renderer.free()
 
     def _geometry(self):
         c = self.cfg
@@ -127,7 +131,7 @@ class Magnifier:
             pass
         winapi.keep_on_top(self.hwnd)
         winapi.keep_on_top(self.ring_hwnd)
-        fps = max(10, min(144, int(self.cfg.get("fps", 60))))
+        fps = max(10, min(240, int(self.cfg.get("fps", 120))))
         self._job = self.root.after(max(1, int(1000 / fps)), self._loop)
 
     def _source(self):
@@ -157,21 +161,76 @@ class Magnifier:
         if not winapi.IS_WIN:
             return
         size, _, left, top, src = self._source()
+        bicubic = self.cfg.get("quality") == QUALITY[0] and winapi.gdiplus is not None
+        self._renderer.draw(self.win.winfo_id(), size, left, top, src, bicubic)
+
+
+class SmoothRenderer:
+    """Screen region -> scaled lens image, double-buffered. Bicubic via GDI+, otherwise GDI HALFTONE.
+    Buffers are kept between frames and rebuilt only when the size changes."""
+
+    def __init__(self):
+        self.key = None
+        self.src_dc = self.src_bmp = self.src_old = self.bitmap = None
+        self.dst_dc = self.dst_bmp = self.dst_old = self.graphics = None
+
+    def free(self):
+        if not winapi.IS_WIN or self.key is None:
+            self.key = None
+            return
+        g, gp = winapi.gdi32, winapi.gdiplus
+        if self.graphics:
+            gp.GdipDeleteGraphics(self.graphics)
+        if self.bitmap:
+            gp.GdipDisposeImage(self.bitmap)
+        for dc, bmp, old in ((self.src_dc, self.src_bmp, self.src_old), (self.dst_dc, self.dst_bmp, self.dst_old)):
+            if dc:
+                g.SelectObject(dc, old)
+                g.DeleteObject(bmp)
+                g.DeleteDC(dc)
+        self.__init__()
+
+    def _ensure(self, ref_dc, size, cap, bicubic):
+        key = (size, cap, bicubic)
+        if key == self.key:
+            return
+        self.free()
+        g, gp = winapi.gdi32, winapi.gdiplus
+        self.src_dc = g.CreateCompatibleDC(ref_dc)
+        bits = ctypes.c_void_p()
+        bih = winapi.BITMAPINFOHEADER(ctypes.sizeof(winapi.BITMAPINFOHEADER), cap, -cap, 1, 32, 0, 0, 0, 0, 0, 0)
+        self.src_bmp = g.CreateDIBSection(ref_dc, ctypes.byref(bih), 0, ctypes.byref(bits), None, 0)
+        self.src_old = g.SelectObject(self.src_dc, self.src_bmp)
+        self.dst_dc = g.CreateCompatibleDC(ref_dc)
+        self.dst_bmp = g.CreateCompatibleBitmap(ref_dc, size, size)
+        self.dst_old = g.SelectObject(self.dst_dc, self.dst_bmp)
+        if bicubic:
+            self.bitmap, self.graphics = ctypes.c_void_p(), ctypes.c_void_p()
+            gp.GdipCreateBitmapFromScan0(cap, cap, cap * 4, 0x00022009, bits, ctypes.byref(self.bitmap))
+            gp.GdipCreateFromHDC(self.dst_dc, ctypes.byref(self.graphics))
+            gp.GdipSetCompositingMode(self.graphics, 1)  # SourceCopy
+            gp.GdipSetInterpolationMode(self.graphics, 7)  # HighQualityBicubic
+            gp.GdipSetPixelOffsetMode(self.graphics, 2)  # HighQuality
+        else:
+            g.SetStretchBltMode(self.dst_dc, winapi.HALFTONE)
+            g.SetBrushOrgEx(self.dst_dc, 0, 0, None)
+        self.key = key
+
+    def draw(self, hwnd, size, left, top, src, bicubic):
         u, g = winapi.user32, winapi.gdi32
-        target = self.win.winfo_id()
+        cap = src + 2 * MARGIN
         screen = u.GetDC(None)
-        dc = u.GetDC(target)
-        mem = g.CreateCompatibleDC(dc)
-        bmp = g.CreateCompatibleBitmap(dc, size, size)
-        old = g.SelectObject(mem, bmp)
+        dc = u.GetDC(hwnd)
         try:
-            g.SetStretchBltMode(mem, winapi.HALFTONE)
-            g.SetBrushOrgEx(mem, 0, 0, None)
-            g.StretchBlt(mem, 0, 0, size, size, screen, left, top, src, src, winapi.SRCCOPY)
-            g.BitBlt(dc, 0, 0, size, size, mem, 0, 0, winapi.SRCCOPY)
+            self._ensure(dc, size, cap, bicubic)
+            g.BitBlt(self.src_dc, 0, 0, cap, cap, screen, left - MARGIN, top - MARGIN, winapi.SRCCOPY)
+            if bicubic:
+                g.GdiFlush()
+                winapi.gdiplus.GdipDrawImageRectRectI(self.graphics, self.bitmap, 0, 0, size, size,
+                                                      MARGIN, MARGIN, src, src, 2, None, None, None)
+            else:
+                g.StretchBlt(self.dst_dc, 0, 0, size, size, self.src_dc, MARGIN, MARGIN, src, src, winapi.SRCCOPY)
+            g.BitBlt(dc, 0, 0, size, size, self.dst_dc, 0, 0, winapi.SRCCOPY)
         finally:
-            g.SelectObject(mem, old)
-            g.DeleteObject(bmp)
-            g.DeleteDC(mem)
-            u.ReleaseDC(target, dc)
+            u.ReleaseDC(hwnd, dc)
             u.ReleaseDC(None, screen)

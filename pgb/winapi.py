@@ -225,3 +225,43 @@ if IS_WIN:
             mag = None
     except OSError:
         mag = None
+
+
+class GdiplusStartupInput(ctypes.Structure):
+    _fields_ = [("GdiplusVersion", ctypes.c_uint32), ("DebugEventCallback", ctypes.c_void_p),
+                ("SuppressBackgroundThread", wintypes.BOOL), ("SuppressExternalCodecs", wintypes.BOOL)]
+
+
+gdiplus = None
+if IS_WIN:
+    gdi32.CreateDIBSection.restype = wintypes.HBITMAP
+    gdi32.CreateDIBSection.argtypes = [wintypes.HDC, ctypes.c_void_p, wintypes.UINT,
+                                       ctypes.POINTER(ctypes.c_void_p), wintypes.HANDLE, wintypes.DWORD]
+    try:
+        gdiplus = ctypes.WinDLL("gdiplus")
+        _token = ctypes.c_size_t()
+        if gdiplus.GdiplusStartup(ctypes.byref(_token), ctypes.byref(GdiplusStartupInput(1, None, False, False)),
+                                  None) != 0:
+            gdiplus = None
+        else:
+            gdiplus.GdipCreateBitmapFromScan0.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                                          ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+            gdiplus.GdipCreateFromHDC.argtypes = [wintypes.HDC, ctypes.POINTER(ctypes.c_void_p)]
+            for fn in ("GdipSetInterpolationMode", "GdipSetPixelOffsetMode", "GdipSetCompositingMode",
+                       "GdipSetSmoothingMode"):
+                getattr(gdiplus, fn).argtypes = [ctypes.c_void_p, ctypes.c_int]
+            gdiplus.GdipDrawImageRectRectI.argtypes = [ctypes.c_void_p, ctypes.c_void_p] + [ctypes.c_int] * 9 + \
+                [ctypes.c_void_p] * 3
+            gdiplus.GdipDeleteGraphics.argtypes = [ctypes.c_void_p]
+            gdiplus.GdipDisposeImage.argtypes = [ctypes.c_void_p]
+    except OSError:
+        gdiplus = None
+
+
+def high_res_timer():
+    """1 ms timer resolution so Tk's after() can run the lupa above 64 FPS."""
+    if IS_WIN:
+        try:
+            ctypes.windll.winmm.timeBeginPeriod(1)
+        except (AttributeError, OSError):
+            pass

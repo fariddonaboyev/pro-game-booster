@@ -5,10 +5,9 @@ from tkinter import colorchooser, messagebox, ttk
 
 from . import __version__, booster, cs2, display, settings, winapi
 from .crosshair import COLOR_MODES, PRESET_COLORS, STYLES, CrosshairOverlay
-from .magnifier import MODES, SHAPES, Magnifier
+from .magnifier import MODES, QUALITY, SHAPES, Magnifier
 
 HOTKEYS = list(winapi.KEYS)
-QUALITY = ["Silliq", "Tez (piksel)"]
 
 
 class App:
@@ -175,17 +174,17 @@ class App:
         self.border_preview.grid(row=r, column=1, sticky="w", pady=2)
         r = self._row(f)
         ttk.Label(f, text="Tasvir").grid(row=r, column=0, sticky="w", pady=2)
-        quality = tk.StringVar(value=QUALITY[0] if self.cfg[c]["smooth"] else QUALITY[1])
+        quality = tk.StringVar(value=self.cfg[c]["quality"])
         box = ttk.Combobox(f, textvariable=quality, values=QUALITY, state="readonly")
         box.grid(row=r, column=1, sticky="we", pady=2)
 
         def on_quality(_=None):
-            self.cfg[c]["smooth"] = quality.get() == QUALITY[0]
+            self.cfg[c]["quality"] = quality.get()
             self.save_later()
             self.lupa.restart()
             self.crosshair.lift()
         box.bind("<<ComboboxSelected>>", on_quality)
-        self.scale(f, "Yangilanish (FPS)", c, "fps", 20, 144, 2)
+        self.scale(f, "Yangilanish (FPS)", c, "fps", 30, 240, 5)
         self.scale(f, "Siljitish X", c, "offset_x", -400, 400, 5, apply)
         self.scale(f, "Siljitish Y", c, "offset_y", -400, 400, 5, apply)
         self.combo(f, "Rejim", c, "mode", MODES)
@@ -468,6 +467,7 @@ class App:
 
 def main():
     winapi.set_dpi_aware()
+    winapi.high_res_timer()
     root = tk.Tk()
     App(root)
     root.mainloop()
