@@ -164,8 +164,8 @@ class App:
         apply = self.lupa.apply
         self.btn_lupa = ttk.Button(f, command=self.toggle_lupa)
         self.btn_lupa.grid(row=0, column=0, columnspan=2, sticky="we", pady=(0, 8))
-        self.zoom_var = self.scale(f, "Kattalashtirish (x)", c, "zoom", 1.5, 6.0, 0.5)
-        self.scale(f, "O'lcham (px)", c, "size", 120, 700, 10, apply)
+        self.zoom_var = self.scale(f, "Kattalashtirish (x)", c, "zoom", 1.0, 6.0, 0.1)
+        self.scale(f, "O'lcham (px)", c, "size", 50, max(winapi.screen_size()), 10, apply)
         self.combo(f, "Shakl", c, "shape", SHAPES, apply)
         self.check(f, "Ramka", c, "border", apply)
         r = self._row(f)
@@ -198,7 +198,7 @@ class App:
         self._refresh_buttons()
 
     def change_zoom(self, delta):
-        z = min(6.0, max(1.5, float(self.cfg["lupa"]["zoom"]) + delta))
+        z = round(min(6.0, max(1.0, float(self.cfg["lupa"]["zoom"]) + delta)), 2)
         self.cfg["lupa"]["zoom"] = z
         self.zoom_var.set(z)
         self.save_later()
@@ -404,9 +404,9 @@ class App:
         elif self._edge(lc["hotkey"]):
             self.toggle_lupa()
         if self._edge(lc["zoom_in"]):
-            self.change_zoom(0.5)
+            self.change_zoom(0.25)
         if self._edge(lc["zoom_out"]):
-            self.change_zoom(-0.5)
+            self.change_zoom(-0.25)
         if self._edge(bc["hotkey"]):
             self.run_boost()
         if self._edge(sc["restore_hotkey"]):

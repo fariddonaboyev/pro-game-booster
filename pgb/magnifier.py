@@ -126,7 +126,7 @@ class Magnifier:
 
     def _source(self):
         size, cx, cy = self._geometry()
-        zoom = max(1.1, float(self.cfg["zoom"]))
+        zoom = max(1.0, float(self.cfg["zoom"]))
         src = size / zoom
         left, top = round(cx - src / 2), round(cy - src / 2)
         return size, zoom, left, top, max(4, round(src))
