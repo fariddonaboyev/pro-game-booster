@@ -13,6 +13,6 @@ Overlay va lupa faqat **Fullscreen Windowed** rejimida ko'rinadi. Windows 10 200
 
 ## Build
 
-GitHub Actions (`build-windows.yml`) har `main` push'da EXE va o'rnatuvchini yig'ib, artifact sifatida yuklaydi.
+GitHub Actions (`build-windows.yml`) har `main` push'da faqat o'rnatuvchini (`PROGameBooster-Setup.exe`) artifact sifatida yuklaydi.
 
 Qo'lda: `pip install -r requirements.txt pyinstaller` → `pyinstaller --onefile --windowed --uac-admin --name PROGameBooster main.py`.

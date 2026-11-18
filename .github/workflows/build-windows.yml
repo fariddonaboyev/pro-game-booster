@@ -29,7 +29,5 @@ jobs:
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\installer.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: PROGameBooster
-          path: |
-            dist/PROGameBooster.exe
-            dist/PROGameBooster-Setup.exe
+          name: PROGameBooster-Setup
+          path: dist/PROGameBooster-Setup.exe
