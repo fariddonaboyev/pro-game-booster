@@ -15,7 +15,8 @@ class App:
         self.root = root
         self.cfg = settings.load()
         self.crosshair = CrosshairOverlay(root, self.cfg["crosshair"])
-        self.lupa = Magnifier(root, self.cfg["lupa"], on_shown=self.crosshair.lift)
+        self.lupa = Magnifier(root, self.cfg["lupa"], on_shown=self.crosshair.lift,
+                              exclude=lambda: [self.crosshair.hwnd])
         self.events = queue.Queue()
         self._pressed = {}
         self._save_job = None
@@ -166,12 +167,12 @@ class App:
         self.zoom_var = self.scale(f, "Kattalashtirish (x)", c, "zoom", 1.5, 6.0, 0.5)
         self.scale(f, "O'lcham (px)", c, "size", 120, 700, 10, apply)
         self.combo(f, "Shakl", c, "shape", SHAPES, apply)
-        self.check(f, "Ramka", c, "border")
+        self.check(f, "Ramka", c, "border", apply)
         r = self._row(f)
         ttk.Label(f, text="Ramka rangi").grid(row=r, column=0, sticky="w")
         self.border_preview = tk.Button(f, width=3, bg=self.cfg[c]["border_color"], command=self.pick_border)
         self.border_preview.grid(row=r, column=1, sticky="w", pady=2)
-        self.check(f, "Silliq tasvir (sifatli, biroz sekinroq)", c, "smooth")
+        self.check(f, "Silliq tasvir (faqat zaxira GDI rejimida)", c, "smooth")
         self.scale(f, "Yangilanish (FPS)", c, "fps", 20, 144, 2)
         self.scale(f, "Siljitish X", c, "offset_x", -400, 400, 5, apply)
         self.scale(f, "Siljitish Y", c, "offset_y", -400, 400, 5, apply)
@@ -188,6 +189,7 @@ class App:
         if color:
             self.cfg["lupa"]["border_color"] = color
             self.border_preview.configure(bg=color)
+            self.lupa.apply()
             self.save_later()
 
     def toggle_lupa(self):

@@ -184,3 +184,44 @@ def sample_avg(x, y, w, h):
         gdi32.DeleteObject(bmp)
         gdi32.DeleteDC(mem)
         user32.ReleaseDC(None, screen)
+
+
+class RECT(ctypes.Structure):
+    _fields_ = [("left", wintypes.LONG), ("top", wintypes.LONG), ("right", wintypes.LONG), ("bottom", wintypes.LONG)]
+
+
+class MAGTRANSFORM(ctypes.Structure):
+    _fields_ = [("v", ctypes.c_float * 9)]
+
+
+WS_CHILD, WS_VISIBLE = 0x40000000, 0x10000000
+LWA_ALPHA = 0x2
+MW_FILTERMODE_EXCLUDE = 0
+mag = None
+
+if IS_WIN:
+    user32.CreateWindowExW.restype = wintypes.HWND
+    user32.CreateWindowExW.argtypes = [wintypes.DWORD, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD,
+                                       ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                       wintypes.HWND, wintypes.HMENU, wintypes.HINSTANCE, wintypes.LPVOID]
+    user32.DestroyWindow.argtypes = [wintypes.HWND]
+    user32.MoveWindow.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                  wintypes.BOOL]
+    user32.InvalidateRect.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.BOOL]
+    user32.SetLayeredWindowAttributes.argtypes = [wintypes.HWND, wintypes.DWORD, wintypes.BYTE, wintypes.DWORD]
+    kernel32.GetModuleHandleW.restype = wintypes.HMODULE
+    kernel32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+    try:
+        mag = ctypes.WinDLL("Magnification", use_last_error=True)
+        mag.MagInitialize.restype = wintypes.BOOL
+        mag.MagSetWindowSource.restype = wintypes.BOOL
+        mag.MagSetWindowSource.argtypes = [wintypes.HWND, RECT]
+        mag.MagSetWindowTransform.restype = wintypes.BOOL
+        mag.MagSetWindowTransform.argtypes = [wintypes.HWND, ctypes.POINTER(MAGTRANSFORM)]
+        mag.MagSetWindowFilterList.restype = wintypes.BOOL
+        mag.MagSetWindowFilterList.argtypes = [wintypes.HWND, wintypes.DWORD, ctypes.c_int,
+                                               ctypes.POINTER(wintypes.HWND)]
+        if not mag.MagInitialize():
+            mag = None
+    except OSError:
+        mag = None
