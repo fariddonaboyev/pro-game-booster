@@ -9,8 +9,8 @@ RING_KEY = "#010101"
 
 
 class Magnifier:
-    """Click-through lens at screen centre. Uses the Windows Magnification API (no flicker, true colours);
-    falls back to double-buffered GDI StretchBlt if it is unavailable."""
+    """Click-through lens at screen centre. Smooth mode: double-buffered GDI StretchBlt with HALFTONE filtering;
+    fast mode: Windows Magnification API (nearest-neighbour pixels)."""
 
     def __init__(self, root, cfg, on_shown=None, exclude=None):
         self.root = root
@@ -30,6 +30,11 @@ class Magnifier:
     def toggle(self):
         self.hide() if self.visible else self.show()
 
+    def restart(self):
+        if self.visible:
+            self.hide()
+            self.show()
+
     def show(self):
         if self.win:
             self.apply()
@@ -37,12 +42,13 @@ class Magnifier:
         self.win = tk.Toplevel(self.root)
         self.win.overrideredirect(True)
         self.win.attributes("-topmost", True)
-        self.win.configure(bg="#000000")
+        use_mag = winapi.mag is not None and not self.cfg["smooth"]
+        self.win.configure(bg="#000000" if use_mag else "")
         self._place(self.win)
-        self.hwnd = winapi.make_overlay(self.win, exclude_from_capture=winapi.mag is None)
+        self.hwnd = winapi.make_overlay(self.win, exclude_from_capture=not use_mag)
         if winapi.IS_WIN:
             winapi.user32.SetLayeredWindowAttributes(self.hwnd, 0, 255, winapi.LWA_ALPHA)
-            if winapi.mag is not None:
+            if use_mag:
                 size = int(self.cfg["size"])
                 self.mag_hwnd = winapi.user32.CreateWindowExW(
                     0, "Magnifier", "PROLupa", winapi.WS_CHILD | winapi.WS_VISIBLE, 0, 0, size, size,
@@ -159,7 +165,7 @@ class Magnifier:
         bmp = g.CreateCompatibleBitmap(dc, size, size)
         old = g.SelectObject(mem, bmp)
         try:
-            g.SetStretchBltMode(mem, winapi.HALFTONE if self.cfg["smooth"] else winapi.COLORONCOLOR)
+            g.SetStretchBltMode(mem, winapi.HALFTONE)
             g.SetBrushOrgEx(mem, 0, 0, None)
             g.StretchBlt(mem, 0, 0, size, size, screen, left, top, src, src, winapi.SRCCOPY)
             g.BitBlt(dc, 0, 0, size, size, mem, 0, 0, winapi.SRCCOPY)

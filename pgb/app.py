@@ -8,6 +8,7 @@ from .crosshair import COLOR_MODES, PRESET_COLORS, STYLES, CrosshairOverlay
 from .magnifier import MODES, SHAPES, Magnifier
 
 HOTKEYS = list(winapi.KEYS)
+QUALITY = ["Silliq", "Tez (piksel)"]
 
 
 class App:
@@ -172,7 +173,18 @@ class App:
         ttk.Label(f, text="Ramka rangi").grid(row=r, column=0, sticky="w")
         self.border_preview = tk.Button(f, width=3, bg=self.cfg[c]["border_color"], command=self.pick_border)
         self.border_preview.grid(row=r, column=1, sticky="w", pady=2)
-        self.check(f, "Silliq tasvir (faqat zaxira GDI rejimida)", c, "smooth")
+        r = self._row(f)
+        ttk.Label(f, text="Tasvir").grid(row=r, column=0, sticky="w", pady=2)
+        quality = tk.StringVar(value=QUALITY[0] if self.cfg[c]["smooth"] else QUALITY[1])
+        box = ttk.Combobox(f, textvariable=quality, values=QUALITY, state="readonly")
+        box.grid(row=r, column=1, sticky="we", pady=2)
+
+        def on_quality(_=None):
+            self.cfg[c]["smooth"] = quality.get() == QUALITY[0]
+            self.save_later()
+            self.lupa.restart()
+            self.crosshair.lift()
+        box.bind("<<ComboboxSelected>>", on_quality)
         self.scale(f, "Yangilanish (FPS)", c, "fps", 20, 144, 2)
         self.scale(f, "Siljitish X", c, "offset_x", -400, 400, 5, apply)
         self.scale(f, "Siljitish Y", c, "offset_y", -400, 400, 5, apply)
